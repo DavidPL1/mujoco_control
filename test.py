@@ -294,7 +294,6 @@ def c_ext(total_steps=None, step_size=1) -> None:
 import timeit
 
 if __name__ == "__main__":
-    breakpoint()
     t_py = timeit.Timer(lambda: py_control(1000))
     t_c1 = timeit.Timer(lambda: c_ext(1000, 1))
     t_c10 = timeit.Timer(lambda: c_ext(1000, 10))
@@ -306,14 +305,14 @@ if __name__ == "__main__":
     r4 = t_c100.repeat(5, 100)
 
     print(
-        f"py controller:\n\tmean: {np.mean(r1)}+-{np.std(r1)}\nmin: {np.min(r1)}\nmax: {np.max(r1)}"
+        f"py controller:\n\tmean: {np.mean(r1):.2f}s +- {np.std(r1):.2f}s\n\tmin: {np.min(r1):.2f}s\n\tmax: {np.max(r1):.2f}s"
     )
     print(
-        f"c controller 1 step:\n\tmean: {np.mean(r2)}+-{np.std(r2)}\nmin: {np.min(r2)}\nmax: {np.max(r2)}"
+        f"c controller 1 step:\n\tmean: {np.mean(r2):.2f}s +- {np.std(r2):.2f}s ({np.mean(r1)/np.mean(r2):.2f}%)\n\tmin: {np.min(r2):.2f}s ({np.min(r1)/np.min(r2):.2f}%)\n\tmax: {np.max(r2):.2f}s ({np.max(r1)/np.max(r2):.2f}%)"
     )
     print(
-        f"c controller 10 steps:\n\tmean: {np.mean(r3)}+-{np.std(r3)}\nmin: {np.min(r3)}\nmax: {np.max(r3)}"
+        f"c controller 10 step:\n\tmean: {np.mean(r3):.2f}s +- {np.std(r3):.2f}s ({np.mean(r1)/np.mean(r3):.2f}%)\n\tmin: {np.min(r3):.2f}s ({np.min(r1)/np.min(r3):.2f}%)\n\tmax: {np.max(r3):.2f}s ({np.max(r1)/np.max(r3):.2f}%)"
     )
     print(
-        f"c controller 100 steps:\n\tmean: {np.mean(r4)}+-{np.std(r4)}\nmin: {np.min(r4)}\nmax: {np.max(r4)}"
+        f"c controller 100 step:\n\tmean: {np.mean(r4):.2f}s +- {np.std(r4):.2f}s ({np.mean(r1)/np.mean(r4):.2f}%)\n\tmin: {np.min(r4):.2f}s ({np.min(r1)/np.min(r4):.2f}%)\n\tmax: {np.max(r4):.2f}s ({np.max(r1)/np.max(r4):.2f}%)"
     )
