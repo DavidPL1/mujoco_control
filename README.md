@@ -1,17 +1,87 @@
 # mujoco_ik_control
 
-Install with
+## Install (Linux w conda)
+
+setup conda environment
+
+1. Set Mujoco version (tested with MuJoCo 3.2.3)
 ```bash
-pip install .
+export MUJOCO_VERSION=3.2.3
 ```
 
-then import in python with
+2. Install mujoco
+```bash
+mkdir ${HOME}/.mujoco
+cd ${HOME}/.mujoco
+wget https://github.com/google-deepmind/mujoco/releases/download/${MUJOCO_VERSION}/mujoco-${MUJOCO_VERSION}-linux-x86_64.tar.gz
+tar -xzf mujoco-${MUJOCO_VERSION}-linux-x86_64.tar.gz && rm mujoco-${MUJOCO_VERSION}-linux-x86_64.tar.gz
+pip install mujoco==${MUJOCO_VERSION}
+```
+
+3. Create utility script for setting up paths
+```bash
+echo "
+# For cmake to find mujoco
+export MUJOCO_DIR=\${HOME}/volmounts/mujoco/mujoco-\${MUJOCO_VERSION}
+export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:\${MUJOCO_DIR}/lib
+export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:/usr/lib/nvidia
+# for offscreen rendering
+export MUJOCO_GL=egl
+
+export CUDA_HOME=\$CONDA_PREFIX
+" > ${HOME}/sourcescript.sh
+```
+
+4. Clone this repository
+```bash
+git clone https://github.com/DavidPL1/mujoco_ik_control.git ${HOME}/mujoco_ik_control
+```
+
+5. Install library with bindings in conda
+```bash
+source ${HOME}/sourcescript.sh
+pip install ${HOME}/mujoco_ik_control
+```
+
+## Usage
+
+### Opspace Controller
+import in python with
 
 ```python
-from mujoco_ik_control import *
+from mujoco_ik_control import opspace_ctrl
+
+# initialize model and data, and compute necessary data
+
+...
+
+# instanciate controller
+ctrlr = opspace_ctrl.OpspaceController(
+        model,
+        site_id,
+        dof_ids,
+        actuator_ids,
+        True,  # gravcomp
+        q0,
+        integration_dt,
+        Kpos,
+        Kori,
+        Kp,
+        Kd,
+        Kp_null,
+        Kd_null,
+    )
+
+...
+
+# run controller steps
+
+ctrlr.run_steps(data, step_size, target_pos, target_quat)
+
 ```
 
-## Speed test with Opspace Controller
+
+### Speed test
 
 run on `11th Gen Intel(R) Core(TM) i7-11700K @ 3.60GHz`
 
