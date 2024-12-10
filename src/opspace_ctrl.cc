@@ -205,6 +205,11 @@ namespace mujoco::python
             .def(py::init([](py::object m, int site_id, PyIntCArray dof_ids, PyIntCArray actuator_ids, bool gravcomp, PyCArray q0, double integration_dt,
                              double Kpos, double Kori, PyCArray Kp, PyCArray Kd, PyCArray Kp_null, PyCArray Kd_null)
                           {
+
+            if (mjVERSION_HEADER != mj_version()) {
+                throw std::runtime_error("MuJoCo library and header mismatch! mjVERSION_HEADER: " + std::to_string(mjVERSION_HEADER) + ", mj_version(): " + std::to_string(mj_version()));
+            }
+
             std::uintptr_t m_raw = m.attr("_address").cast<std::uintptr_t>();
             const mjModel *model = reinterpret_cast<const mjModel*>(m_raw);
 
