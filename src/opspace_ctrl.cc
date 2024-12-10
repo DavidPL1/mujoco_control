@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <optional>
 
 #include <Eigen/Dense>
 #include <algorithm> // for std::max and std::min
@@ -71,13 +72,13 @@ namespace mujoco::python
         }
         ~OpspaceController() {}
 
-        void run_steps(mjData *d, int n_steps, mjtNum *target_pos, mjtNum *target_quat)
+        void run_steps(mjData *d, int n_steps, mjtNum *target_pos, mjtNum *target_quat, mjtNum *jnt_ctrl, mjtNum *gripper_ctrl)
         {
             mju_copy3(this->target_pos, target_pos);
             mju_copy4(this->target_quat, target_quat);
             for (int i = 0; i < n_steps; ++i)
             {
-                _run_step(d);
+                _run_step(d, i, jnt_ctrl, gripper_ctrl);
                 mj_step(model, d);
             }
         }
@@ -112,7 +113,7 @@ namespace mujoco::python
         mjtNum site_quat_conj[4];
         mjtNum error_quat[4];
 
-        void _run_step(mjData *d)
+        void _run_step(mjData *d, int step, mjtNum *jnt_ctrl, mjtNum *gripper_ctrl)
         {
             Eigen::Map<Eigen::Vector3d> pos(target_pos);
             Eigen::Map<Eigen::Quaterniond> quat(target_quat);
@@ -162,7 +163,7 @@ namespace mujoco::python
 
             // Add joint task in nullspace
             Eigen::MatrixXd Jbar = M_inv_eigen.topLeftCorner(model->nv - 2, model->nv - 2) * jac.transpose() * Mx_eigen;
-            Eigen::VectorXd ddq = Kp_null_eigen * (Eigen::Map<Eigen::VectorXd>(q0, 7) - Eigen::Map<Eigen::VectorXd>(d->qpos + dof_ids[0], 7)) - Kd_null_eigen * Eigen::Map<Eigen::VectorXd>(d->qvel + dof_ids[0], 7);
+            Eigen::VectorXd ddq = Kp_null_eigen.cwiseProduct(Eigen::Map<Eigen::VectorXd>(q0, 7) - Eigen::Map<Eigen::VectorXd>(d->qpos + dof_ids[0], 7)) - Kd_null_eigen.cwiseProduct(Eigen::Map<Eigen::VectorXd>(d->qvel + dof_ids[0], 7));
             tau_eigen += (Eigen::MatrixXd::Identity(model->nv - 2, model->nv - 2) - jac.transpose() * Jbar.transpose()) * ddq;
 
             // Add gravity compensation
@@ -170,18 +171,26 @@ namespace mujoco::python
             {
                 tau_eigen += Eigen::Map<Eigen::VectorXd>(d->qfrc_bias + dof_ids[0], 7);
             }
-
-            // Clip tau values to actuator control range
+            
+            // Clip tau values to actuator control range and assign to control data
             for (int i = 0; i < 7; ++i)
             {
                 tau_eigen[i] = std::max(model->actuator_ctrlrange[actuator_ids[i] * 2], std::min(tau_eigen[i], model->actuator_ctrlrange[actuator_ids[i] * 2 + 1]));
-            }
-
-            // Assign tau to control data
-            for (int i = 0; i < 7; ++i)
-            {
                 d->ctrl[actuator_ids[i]] = tau_eigen[i];
             }
+
+            if (jnt_ctrl != nullptr)
+            {
+                memcpy(jnt_ctrl + step * 7, tau, 7 * sizeof(mjtNum));
+            }
+
+            // Assign gripper control
+            if (gripper_ctrl != nullptr)
+            {
+                d->ctrl[actuator_ids[7]] = gripper_ctrl[step];
+            }
+            // std::cout << "tau["<<step<<"]: " << tau_eigen.transpose() << std::endl;
+
             return;
         }
     };
@@ -220,13 +229,39 @@ namespace mujoco::python
             mjtNum* Kd_null_ptr = static_cast<mjtNum*>(Kd_null_buf.ptr);
 
             return new OpspaceController(model, site_id, dof_ids_ptr, actuator_ids_ptr, gravcomp, q0_ptr, integration_dt, Kpos, Kori, Kp_ptr, Kd_ptr, Kp_null_ptr, Kd_null_ptr); }))
-            .def("run_steps", [](OpspaceController &self, py::object d, int n_steps, PyCArray t_pos, PyCArray t_quat)
+            .def("run_steps", [](OpspaceController &self, py::object d, int n_steps, PyCArray t_pos, PyCArray t_quat, std::optional<const PyCArray> jnt_ctrl, std::optional<const PyCArray> gripper_ctrl)
                  {
             std::uintptr_t d_raw = d.attr("_address").cast<std::uintptr_t>();
             mjData *data = reinterpret_cast<mjData*>(d_raw);
 
             auto pos_buf = t_pos.request();
             auto quat_buf = t_quat.request();
+
+            mjtNum *jnt_ctrl_ptr = nullptr;
+            if (jnt_ctrl.has_value())
+            {
+                py::buffer_info info = jnt_ctrl->request();
+                if (info.size != 7 * n_steps)
+                {
+                    std::ostringstream msg;
+                    msg << "Joint control array size should be " << 7 * n_steps << ", got " << info.size;
+                    throw py::value_error(msg.str());
+                }
+                jnt_ctrl_ptr = static_cast<mjtNum*>(info.ptr);
+            }
+
+            mjtNum *gripper_ctrl_ptr = nullptr;
+            if (gripper_ctrl.has_value())
+            {
+                py::buffer_info info = gripper_ctrl->request();
+                if (info.size != 1 * n_steps)
+                {
+                    std::ostringstream msg;
+                    msg << "Gripper control array size should be " << n_steps << ", got " << info.size;
+                    throw py::value_error(msg.str());
+                }
+                gripper_ctrl_ptr = static_cast<mjtNum*>(info.ptr);
+            }
 
             if (pos_buf.ndim != 1 || quat_buf.ndim != 1) {
                 throw std::runtime_error("Input arrays must be 1-dimensional");
@@ -238,7 +273,7 @@ namespace mujoco::python
             mjtNum* target_pos_ptr = static_cast<mjtNum*>(pos_buf.ptr);
             mjtNum* target_quat_ptr = static_cast<mjtNum*>(quat_buf.ptr);
 
-            self.run_steps(data, n_steps, target_pos_ptr, target_quat_ptr); });
+            self.run_steps(data, n_steps, target_pos_ptr, target_quat_ptr, jnt_ctrl_ptr, gripper_ctrl_ptr); });
     }
 
 } // end namespace mujoco::python
