@@ -202,6 +202,7 @@ namespace mujoco::python
         using PyIntCArray = py::array_t<int, py::array::c_style | py::array::forcecast>;
 
         py::class_<OpspaceController>(pymodule, "OpspaceController")
+            .def("mj_version", [](OpspaceController &self){ return mjVERSION_HEADER; })
             .def(py::init([](py::object m, int site_id, PyIntCArray dof_ids, PyIntCArray actuator_ids, bool gravcomp, PyCArray q0, double integration_dt,
                              double Kpos, double Kori, PyCArray Kp, PyCArray Kd, PyCArray Kp_null, PyCArray Kd_null)
                           {
