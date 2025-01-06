@@ -136,11 +136,11 @@ namespace mujoco::python
 
             // Compute Jacobian
             mj_jacSite(model, d, fjac, fjac + 3 * model->nv, site_id);
-            Eigen::MatrixXd jac = fjac_eigen.leftCols(7);
+            Eigen::MatrixXd jac = fjac_eigen(Eigen::all, Eigen::seq(dof_ids[0], dof_ids[6]));
 
             // Compute task-space inertia matrix
             mj_solveM(model, d, M_inv, eye_mjt, model->nv);
-            Eigen::MatrixXd Mx_inv = jac * M_inv_eigen.topLeftCorner(model->nv - 2, model->nv - 2) * jac.transpose();
+            Eigen::MatrixXd Mx_inv = jac * M_inv_eigen(Eigen::seq(dof_ids[0], dof_ids[6]), Eigen::seq(dof_ids[0], dof_ids[6])) * jac.transpose();
 
             if (std::abs(Mx_inv.determinant()) >= 1e-2)
             {
@@ -162,9 +162,9 @@ namespace mujoco::python
             tau_eigen = jac.transpose() * Mx_eigen * temp;
 
             // Add joint task in nullspace
-            Eigen::MatrixXd Jbar = M_inv_eigen.topLeftCorner(model->nv - 2, model->nv - 2) * jac.transpose() * Mx_eigen;
+            Eigen::MatrixXd Jbar = M_inv_eigen(Eigen::seq(dof_ids[0], dof_ids[6]), Eigen::seq(dof_ids[0], dof_ids[6])) * jac.transpose() * Mx_eigen;
             Eigen::VectorXd ddq = Kp_null_eigen.cwiseProduct(Eigen::Map<Eigen::VectorXd>(q0, 7) - Eigen::Map<Eigen::VectorXd>(d->qpos + dof_ids[0], 7)) - Kd_null_eigen.cwiseProduct(Eigen::Map<Eigen::VectorXd>(d->qvel + dof_ids[0], 7));
-            tau_eigen += (Eigen::MatrixXd::Identity(model->nv - 2, model->nv - 2) - jac.transpose() * Jbar.transpose()) * ddq;
+            tau_eigen += (Eigen::MatrixXd::Identity(7, 7) - jac.transpose() * Jbar.transpose()) * ddq;
 
             // Add gravity compensation
             if (gravcomp)
