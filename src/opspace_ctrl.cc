@@ -226,6 +226,10 @@ namespace mujoco::python
                 throw std::runtime_error("Input arrays must be 1-dimensional");
             }
 
+            if (q0_buf.size != 7) {
+                throw std::runtime_error("q0 has wrong size: " + q0_buf.size);
+            }
+
             int* dof_ids_ptr = static_cast<int*>(dof_ids_buf.ptr);
             int* actuator_ids_ptr = static_cast<int*>(actuator_ids_buf.ptr);
             mjtNum* q0_ptr = static_cast<mjtNum*>(q0_buf.ptr);
